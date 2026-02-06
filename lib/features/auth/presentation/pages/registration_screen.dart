@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
@@ -20,15 +22,18 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   DateTime? _selectedDate;
   File? _profileImage;
 
-  _pickImage(ImageSource source) async {
+  Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source);
     if (pickedFile != null) {
-      setState(() => _profileImage = File(pickedFile.path));
+      setState(() {
+        _profileImage = File(pickedFile.path);
+        _photoError = null;
+      });
     }
   }
 
-  _pickDate() async {
+  Future<void> _pickDate() async {
     final date = await showDatePicker(
       context: context,
       initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
@@ -39,6 +44,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       setState(() => _selectedDate = date);
     }
   }
+
+  String? _photoError;
+  String? _dobError;
 
   @override
   Widget build(BuildContext context) {
@@ -68,14 +76,40 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 children: [
                   GestureDetector(
                     onTap: () => _showImageSourceActionSheet(context),
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundImage: _profileImage != null
-                          ? FileImage(_profileImage!)
-                          : null,
-                      child: _profileImage == null
-                          ? const Icon(Icons.camera_alt, size: 50)
-                          : null,
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundColor: _photoError != null
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.errorContainer.withOpacity(0.5)
+                              : null,
+                          backgroundImage: _profileImage != null
+                              ? FileImage(_profileImage!)
+                              : null,
+                          child: _profileImage == null
+                              ? Icon(
+                                  Icons.camera_alt,
+                                  size: 50,
+                                  color: _photoError != null
+                                      ? Theme.of(context).colorScheme.error
+                                      : null,
+                                )
+                              : null,
+                        ),
+                        if (_photoError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              _photoError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -101,14 +135,51 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         (value?.length ?? 0) < 6 ? 'Min 6 characters' : null,
                   ),
                   const SizedBox(height: 16),
-                  ListTile(
-                    title: Text(
-                      _selectedDate == null
-                          ? 'Select DOB'
-                          : 'DOB: ${_selectedDate.toString().split(' ')[0]}',
-                    ),
-                    trailing: const Icon(Icons.calendar_today),
-                    onTap: _pickDate,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        shape: RoundedRectangleBorder(
+                          side: BorderSide(
+                            color: _dobError != null
+                                ? Theme.of(context).colorScheme.error
+                                : Colors.grey.shade400,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        title: Text(
+                          _selectedDate == null
+                              ? 'Select Date of Birth'
+                              : 'DOB: ${_selectedDate.toString().split(' ')[0]}',
+                          style: TextStyle(
+                            color: _dobError != null
+                                ? Theme.of(context).colorScheme.error
+                                : null,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.calendar_today,
+                          color: _dobError != null
+                              ? Theme.of(context).colorScheme.error
+                              : null,
+                        ),
+                        onTap: () {
+                          setState(() => _dobError = null);
+                          _pickDate();
+                        },
+                      ),
+                      if (_dobError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12, top: 4.0),
+                          child: Text(
+                            _dobError!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 24),
                   if (state is AuthLoading)
@@ -116,7 +187,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   else
                     ElevatedButton(
                       onPressed: () {
+                        setState(() {
+                          _photoError = _profileImage == null
+                              ? 'Profile photo is required'
+                              : null;
+                          _dobError = _selectedDate == null
+                              ? 'Date of Birth is required'
+                              : null;
+                        });
+
                         if (_formKey.currentState!.validate() &&
+                            _profileImage != null &&
                             _selectedDate != null) {
                           final user = User(
                             username: _usernameController.text,
@@ -126,12 +207,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             profilePicture: _profileImage?.path,
                           );
                           context.read<AuthBloc>().add(RegisterRequested(user));
-                        } else if (_selectedDate == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please select Date of Birth'),
-                            ),
-                          );
                         }
                       },
                       child: const Text('Register'),

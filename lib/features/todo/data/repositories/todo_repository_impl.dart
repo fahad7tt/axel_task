@@ -25,7 +25,7 @@ class TodoRepositoryImpl implements TodoRepository {
     final db = await dbHelper.database;
     final connectivityResult = await connectivity.checkConnectivity();
 
-    if (connectivityResult != ConnectivityResult.none) {
+    if (!connectivityResult.contains(ConnectivityResult.none)) {
       try {
         final response = await client.get(
           Uri.parse(

@@ -82,8 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         body: BlocBuilder<TodoBloc, TodoState>(
           builder: (context, state) {
-            if (state is TodoInitial ||
-                (state is TodoLoading && (state as dynamic).todos == null)) {
+            if (state is TodoInitial || state is TodoLoading) {
               return _buildShimmer();
             } else if (state is TodoError) {
               return Center(child: Text(state.message));

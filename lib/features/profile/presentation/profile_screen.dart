@@ -36,7 +36,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  _pickImage() async {
+  Future<void> _pickImage() async {
     final pickedFile = await ImagePicker().pickImage(
       source: ImageSource.gallery,
     );
@@ -48,7 +48,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  _pickDate() async {
+  Future<void> _pickDate() async {
     final date = await showDatePicker(
       context: context,
       initialDate: _selectedDate ?? DateTime.now(),

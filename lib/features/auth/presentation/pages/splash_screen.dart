@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../bloc/auth_bloc.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -10,33 +11,27 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   @override
-  void initState() {
-    super.initState();
-    _startTimer();
-  }
-
-  _startTimer() async {
-    // Simulate initialization or check auth state
-    Timer(const Duration(seconds: 3), () {
-      // Navigate to Login or Home
-      // For now, let's go to Login
-      Navigator.of(context).pushReplacementNamed('/login');
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FlutterLogo(size: 100),
-            SizedBox(height: 20),
-            CircularProgressIndicator(),
-            SizedBox(height: 10),
-            Text('Initializing...', style: TextStyle(fontSize: 16)),
-          ],
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is Authenticated) {
+          Navigator.of(context).pushReplacementNamed('/home');
+        } else if (state is Unauthenticated) {
+          Navigator.of(context).pushReplacementNamed('/login');
+        }
+      },
+      child: const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FlutterLogo(size: 100),
+              SizedBox(height: 20),
+              CircularProgressIndicator(),
+              SizedBox(height: 10),
+              Text('Initializing...', style: TextStyle(fontSize: 16)),
+            ],
+          ),
         ),
       ),
     );

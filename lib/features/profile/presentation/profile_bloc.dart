@@ -88,8 +88,9 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     int filledFields = 0;
     if (user.username.isNotEmpty) filledFields++;
     if (user.fullName.isNotEmpty) filledFields++;
-    if (user.profilePicture != null && user.profilePicture!.isNotEmpty)
+    if (user.profilePicture != null && user.profilePicture!.isNotEmpty) {
       filledFields++;
+    }
     if (user.dob.isNotEmpty) filledFields++;
     return filledFields / totalFields;
   }

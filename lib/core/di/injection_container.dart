@@ -14,14 +14,15 @@ import '../utils/db_helper.dart';
 final sl = GetIt.instance;
 
 Future<void> init() async {
-  //! Features
+  /// Features
+  
   // Auth
   sl.registerLazySingleton<AuthRepository>(
     () => AuthRepositoryImpl(sharedPreferences: sl(), dbHelper: sl()),
   );
   sl.registerFactory(() => AuthBloc(authRepository: sl()));
 
-  // Todo
+  // To-do
   sl.registerLazySingleton<TodoRepository>(
     () => TodoRepositoryImpl(client: sl(), dbHelper: sl(), connectivity: sl()),
   );
@@ -30,10 +31,10 @@ Future<void> init() async {
   // Profile
   sl.registerFactory(() => ProfileBloc(authRepository: sl()));
 
-  //! Core
+  /// Core
   sl.registerLazySingleton(() => DBHelper());
 
-  //! External
+  /// External
   final sharedPreferences = await SharedPreferences.getInstance();
   sl.registerLazySingleton(() => sharedPreferences);
   sl.registerLazySingleton(() => http.Client());
