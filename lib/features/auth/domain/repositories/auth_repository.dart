@@ -8,5 +8,6 @@ abstract class AuthRepository {
   Future<User?> getLoggedInUser();
   Future<void> setLoggedIn(bool isLoggedIn);
   Future<void> saveUser(User user);
+  Future<void> updateUser(User user);
   Future<bool> checkUsernameExists(String username);
 }

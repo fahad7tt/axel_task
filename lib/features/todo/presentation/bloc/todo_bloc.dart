@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../domain/repositories/todo_repository.dart';
@@ -12,7 +13,8 @@ abstract class TodoEvent extends Equatable {
 
 class FetchTodos extends TodoEvent {
   final bool isRefresh;
-  FetchTodos({this.isRefresh = false});
+  final Completer<void>? completer;
+  FetchTodos({this.isRefresh = false, this.completer});
 }
 
 class SearchTodos extends TodoEvent {
@@ -24,6 +26,8 @@ class ToggleFavorite extends TodoEvent {
   final int todoId;
   ToggleFavorite(this.todoId);
 }
+
+class ClearTodoCache extends TodoEvent {}
 
 // States
 abstract class TodoState extends Equatable {
@@ -84,6 +88,7 @@ class TodoBloc extends Bloc<TodoEvent, TodoState> {
           .switchMap(mapper),
     );
     on<ToggleFavorite>(_onToggleFavorite);
+    on<ClearTodoCache>(_onClearTodoCache);
   }
 
   Future<void> _onFetchTodos(FetchTodos event, Emitter<TodoState> emit) async {
@@ -99,22 +104,31 @@ class TodoBloc extends Bloc<TodoEvent, TodoState> {
       query = currentState.query;
     }
 
-    if (event.isRefresh || currentState is TodoInitial) {
+    // Only emit TodoLoading on initial fetch or when the list is currently empty
+    if (currentState is TodoInitial ||
+        (event.isRefresh && currentState is! TodoLoaded)) {
       emit(TodoLoading());
     }
 
     try {
       final newTodos = await todoRepository.getTodos(page: page, query: query);
       if (newTodos.isEmpty) {
-        if (currentState is TodoLoaded) {
+        if (currentState is TodoLoaded && !event.isRefresh) {
           emit(currentState.copyWith(hasReachedMax: true));
         } else {
-          emit(TodoLoaded(todos: [], hasReachedMax: true, page: page));
+          emit(
+            TodoLoaded(
+              todos: [],
+              hasReachedMax: true,
+              page: page,
+              query: query,
+            ),
+          );
         }
       } else {
         emit(
           TodoLoaded(
-            todos: oldTodos + newTodos,
+            todos: event.isRefresh ? newTodos : oldTodos + newTodos,
             hasReachedMax: false,
             page: page,
             query: query,
@@ -123,6 +137,8 @@ class TodoBloc extends Bloc<TodoEvent, TodoState> {
       }
     } catch (e) {
       emit(TodoError(e.toString()));
+    } finally {
+      event.completer?.complete();
     }
   }
 
@@ -160,5 +176,9 @@ class TodoBloc extends Bloc<TodoEvent, TodoState> {
       }).toList();
       emit(currentState.copyWith(todos: updatedTodos));
     }
+  }
+
+  void _onClearTodoCache(ClearTodoCache event, Emitter<TodoState> emit) {
+    emit(TodoLoaded(todos: [], hasReachedMax: true, page: 1, query: ''));
   }
 }

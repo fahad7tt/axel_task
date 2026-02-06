@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'dart:io';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
 import 'package:shimmer/shimmer.dart';
 import '../bloc/todo_bloc.dart';
 import '../widgets/todo_list_item.dart';
-import '../../../../core/di/injection_container.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -42,75 +44,158 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => sl<TodoBloc>()..add(FetchTodos()),
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('To-Do List'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.settings),
-              onPressed: () => Navigator.of(context).pushNamed('/settings'),
-            ),
-            IconButton(
-              icon: const Icon(Icons.person),
-              onPressed: () => Navigator.of(context).pushNamed('/profile'),
-            ),
-          ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(60),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Builder(
-                builder: (context) => TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search todos...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My To-Dos'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).pushNamed('/settings'),
+          ),
+          BlocBuilder<AuthBloc, AuthState>(
+            builder: (context, state) {
+              String? profilePath;
+              if (state is Authenticated) {
+                profilePath = state.user.profilePicture;
+              }
+              return GestureDetector(
+                onTap: () => Navigator.of(context).pushNamed('/profile'),
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 16, left: 8),
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withOpacity(0.1),
+                    backgroundImage:
+                        profilePath != null && profilePath.isNotEmpty
+                        ? FileImage(File(profilePath))
+                        : null,
+                    child: profilePath == null || profilePath.isEmpty
+                        ? Icon(
+                            Icons.person,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 20,
+                          )
+                        : null,
                   ),
-                  onChanged: (value) {
-                    context.read<TodoBloc>().add(SearchTodos(value));
-                  },
                 ),
+              );
+            },
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(80),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search your tasks...',
+                prefixIcon: const Icon(Icons.search_rounded),
+                filled: true,
+                fillColor: Theme.of(context).brightness == Brightness.light
+                    ? Colors.white
+                    : const Color(0xFF1E293B),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
               ),
+              onChanged: (value) {
+                context.read<TodoBloc>().add(SearchTodos(value));
+              },
             ),
           ),
         ),
-        body: BlocBuilder<TodoBloc, TodoState>(
+      ),
+      body: RefreshIndicator(
+        onRefresh: () {
+          final completer = Completer<void>();
+          context.read<TodoBloc>().add(
+            FetchTodos(isRefresh: true, completer: completer),
+          );
+          return completer.future;
+        },
+        child: BlocBuilder<TodoBloc, TodoState>(
           builder: (context, state) {
-            if (state is TodoInitial || state is TodoLoading) {
+            if (state is TodoInitial ||
+                (state is TodoLoading && state is! TodoLoaded)) {
               return _buildShimmer();
             } else if (state is TodoError) {
-              return Center(child: Text(state.message));
+              return Center(
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 60,
+                        color: Colors.red,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(state.message, style: const TextStyle(fontSize: 16)),
+                      TextButton(
+                        onPressed: () => context.read<TodoBloc>().add(
+                          FetchTodos(isRefresh: true),
+                        ),
+                        child: const Text('Try Again'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
             } else if (state is TodoLoaded) {
               if (state.todos.isEmpty) {
-                return const Center(child: Text('No todos found.'));
-              }
-              return RefreshIndicator(
-                onRefresh: () async {
-                  context.read<TodoBloc>().add(FetchTodos(isRefresh: true));
-                },
-                child: ListView.builder(
-                  controller: _scrollController,
-                  itemCount: state.hasReachedMax
-                      ? state.todos.length
-                      : state.todos.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index >= state.todos.length) {
-                      return const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: CircularProgressIndicator(),
+                return Center(
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.assignment_turned_in_outlined,
+                          size: 80,
+                          color: Colors.grey.withOpacity(0.5),
                         ),
-                      );
-                    }
-                    return TodoListItem(todo: state.todos[index]);
-                  },
-                ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'No tasks found',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        const Text(
+                          'Try searching for something else',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return ListView.builder(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(top: 8, bottom: 24),
+                itemCount: state.hasReachedMax
+                    ? state.todos.length
+                    : state.todos.length + 1,
+                itemBuilder: (context, index) {
+                  if (index >= state.todos.length) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+                  return TodoListItem(todo: state.todos[index]);
+                },
               );
             }
             return _buildShimmer();
@@ -122,14 +207,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildShimmer() {
     return ListView.builder(
-      itemCount: 10,
+      itemCount: 8,
+      padding: const EdgeInsets.only(top: 8),
       itemBuilder: (context, index) => Shimmer.fromColors(
-        baseColor: Colors.grey[300]!,
-        highlightColor: Colors.grey[100]!,
-        child: ListTile(
-          leading: const CircleAvatar(backgroundColor: Colors.white),
-          title: Container(height: 10, color: Colors.white),
-          subtitle: Container(height: 8, color: Colors.white, width: 100),
+        baseColor: Theme.of(context).brightness == Brightness.light
+            ? Colors.grey[200]!
+            : const Color(0xFF334155),
+        highlightColor: Theme.of(context).brightness == Brightness.light
+            ? Colors.grey[50]!
+            : const Color(0xFF475569),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          height: 80,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
         ),
       ),
     );

@@ -26,6 +26,14 @@ class RegisterRequested extends AuthEvent {
 
 class LogoutRequested extends AuthEvent {}
 
+class UserUpdated extends AuthEvent {
+  final User user;
+  UserUpdated(this.user);
+
+  @override
+  List<Object?> get props => [user];
+}
+
 // States
 abstract class AuthState extends Equatable {
   @override
@@ -39,6 +47,9 @@ class AuthLoading extends AuthState {}
 class Authenticated extends AuthState {
   final User user;
   Authenticated(this.user);
+
+  @override
+  List<Object?> get props => [user];
 }
 
 class Unauthenticated extends AuthState {}
@@ -64,6 +75,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<LoginRequested>(_onLoginRequested);
     on<RegisterRequested>(_onRegisterRequested);
     on<LogoutRequested>(_onLogoutRequested);
+    on<UserUpdated>(_onUserUpdated);
   }
 
   Future<void> _onAppStarted(AppStarted event, Emitter<AuthState> emit) async {
@@ -136,5 +148,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     await authRepository.logout();
     emit(Unauthenticated());
+  }
+
+  void _onUserUpdated(UserUpdated event, Emitter<AuthState> emit) {
+    emit(Authenticated(event.user));
   }
 }

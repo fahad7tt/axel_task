@@ -16,7 +16,20 @@ class DBHelper {
 
   Future<Database> _initDB() async {
     String path = join(await getDatabasesPath(), 'app_database.db');
-    return await openDatabase(path, version: 1, onCreate: _onCreate);
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Drop and recreate todos table to remove foreign key constraint
+      await db.execute('DROP TABLE IF EXISTS todos');
+      await _onCreateTodosTable(db);
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -33,15 +46,17 @@ class DBHelper {
       )
     ''');
 
-    // Todo table
+    await _onCreateTodosTable(db);
+  }
+
+  Future<void> _onCreateTodosTable(Database db) async {
     await db.execute('''
       CREATE TABLE todos(
         id INTEGER PRIMARY KEY,
         userId INTEGER,
         title TEXT,
         completed INTEGER,
-        isFavorite INTEGER DEFAULT 0,
-        FOREIGN KEY (userId) REFERENCES users (id) ON DELETE CASCADE
+        isFavorite INTEGER DEFAULT 0
       )
     ''');
   }

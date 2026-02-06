@@ -78,6 +78,17 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<void> updateUser(User user) async {
+    final db = await dbHelper.database;
+    await db.update(
+      'users',
+      user.toMap(),
+      where: 'id = ?',
+      whereArgs: [user.id],
+    );
+  }
+
+  @override
   Future<bool> checkUsernameExists(String username) async {
     final db = await dbHelper.database;
     final List<Map<String, dynamic>> maps = await db.query(

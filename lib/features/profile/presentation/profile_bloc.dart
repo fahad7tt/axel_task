@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../auth/presentation/bloc/auth_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../auth/domain/repositories/auth_repository.dart';
 import '../../auth/data/models/user_model.dart';
@@ -43,8 +44,10 @@ class ProfileError extends ProfileState {
 // BLoC
 class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
   final AuthRepository authRepository;
+  final AuthBloc authBloc;
 
-  ProfileBloc({required this.authRepository}) : super(ProfileInitial()) {
+  ProfileBloc({required this.authRepository, required this.authBloc})
+    : super(ProfileInitial()) {
     on<LoadProfile>(_onLoadProfile);
     on<UpdateProfile>(_onUpdateProfile);
   }
@@ -76,7 +79,8 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
       // But here we'll just update the user in DB directly or add a new method to repository
       // Let's assume register handles upsert or we update AuthRepository
       // I'll update AuthRepositoryImpl to support update
-      await authRepository.register(event.user);
+      await authRepository.updateUser(event.user);
+      authBloc.add(UserUpdated(event.user));
       emit(ProfileLoaded(event.user, _calculateCompleteness(event.user)));
     } catch (e) {
       emit(ProfileError(e.toString()));

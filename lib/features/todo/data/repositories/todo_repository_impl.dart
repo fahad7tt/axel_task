@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../../core/utils/db_helper.dart';
@@ -24,54 +25,85 @@ class TodoRepositoryImpl implements TodoRepository {
   }) async {
     final db = await dbHelper.database;
     final connectivityResult = await connectivity.checkConnectivity();
+    bool isOnline = !connectivityResult.contains(ConnectivityResult.none);
 
-    if (!connectivityResult.contains(ConnectivityResult.none)) {
+    if (isOnline) {
       try {
-        final response = await client.get(
-          Uri.parse(
-            'https://jsonplaceholder.typicode.com/todos?_page=$page&_limit=$limit',
-          ),
-        );
+        final String url = (query != null && query.isNotEmpty)
+            ? 'https://jsonplaceholder.typicode.com/todos?q=$query&_page=$page&_limit=$limit'
+            : 'https://jsonplaceholder.typicode.com/todos?_page=$page&_limit=$limit';
+
+        debugPrint('Fetching todos from: $url');
+        final response = await client
+            .get(
+              Uri.parse(url),
+              headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'FlutterApp/1.0',
+              },
+            )
+            .timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200) {
-          final List<dynamic> data = json.decode(
-            response.statusCode == 200 ? response.body : '[]',
-          );
+          final List<dynamic> data = json.decode(response.body);
           final List<Todo> remoteTodos = data
               .map((item) => Todo.fromJson(item))
               .toList();
 
-          // Cache remote todos
-          for (var todo in remoteTodos) {
-            // Check if already in DB to preserve isFavorite
-            final List<Map<String, dynamic>> existing = await db.query(
-              'todos',
-              where: 'id = ?',
-              whereArgs: [todo.id],
-            );
+          debugPrint('Successfully fetched ${remoteTodos.length} todos');
 
-            if (existing.isNotEmpty) {
-              final currentTodo = Todo.fromMap(existing.first);
-              final updatedTodo = todo.copyWith(
-                isFavorite: currentTodo.isFavorite,
-              );
-              await db.update(
+          // Cache remote todos using a transaction for performance and atomicity
+          await db.transaction((txn) async {
+            for (var todo in remoteTodos) {
+              final List<Map<String, dynamic>> existing = await txn.query(
                 'todos',
-                updatedTodo.toMap(),
                 where: 'id = ?',
                 whereArgs: [todo.id],
               );
-            } else {
-              await db.insert('todos', todo.toMap());
+
+              if (existing.isNotEmpty) {
+                final currentTodo = Todo.fromMap(existing.first);
+                // Preserve local favorite status
+                final updatedTodo = todo.copyWith(
+                  isFavorite: currentTodo.isFavorite,
+                );
+                await txn.update(
+                  'todos',
+                  updatedTodo.toMap(),
+                  where: 'id = ?',
+                  whereArgs: [todo.id],
+                );
+              } else {
+                await txn.insert('todos', todo.toMap());
+              }
             }
+          });
+
+          if (query != null && query.isNotEmpty) {
+            final List<Todo> combined = [];
+            for (var rt in remoteTodos) {
+              final List<Map<String, dynamic>> local = await db.query(
+                'todos',
+                where: 'id = ?',
+                whereArgs: [rt.id],
+              );
+              if (local.isNotEmpty) {
+                combined.add(Todo.fromMap(local.first));
+              } else {
+                combined.add(rt);
+              }
+            }
+            return combined;
           }
+        } else {
+          debugPrint('API Error: ${response.statusCode}');
         }
       } catch (e) {
-        // Fallback to local if API fails
+        debugPrint('Exception during API fetch: $e');
       }
     }
 
-    // Always fetch from local to ensure search and pagination work consistently
+    // Load from local database (offline fallback or default view)
     String whereClause = '';
     List<dynamic> whereArgs = [];
     if (query != null && query.isNotEmpty) {
@@ -85,9 +117,15 @@ class TodoRepositoryImpl implements TodoRepository {
       whereArgs: whereArgs.isEmpty ? null : whereArgs,
       limit: limit,
       offset: (page - 1) * limit,
+      orderBy: 'id ASC',
     );
 
-    return maps.map((map) => Todo.fromMap(map)).toList();
+    final List<Todo> localTodos = maps.map((map) => Todo.fromMap(map)).toList();
+
+    // If online search was done, remoteTodos were already returned.
+    // This part is for the initial load or scrolling load where isOnline branch
+    // handled the caching but might have fallen through if not a search.
+    return localTodos;
   }
 
   @override
