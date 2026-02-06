@@ -81,9 +81,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             } else if (!_isChanged) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: const Text('Profile updated successfully!'),
-                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  content: const Row(
+                    children: [
+                      Icon(Icons.check_circle_outline, color: Colors.white),
+                      SizedBox(width: 12),
+                      Expanded(child: Text('Profile updated successfully!')),
+                    ],
+                  ),
+                  backgroundColor: Colors.green,
                   behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               );
               Navigator.of(context).pop();
